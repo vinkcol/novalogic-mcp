@@ -1,0 +1,17 @@
+{
+  "device_code": "ABgABIQEAAACvnsHKEvvRQb3Bz3Qc7wnaRXZvU3RzQXJ0aWZhY3RzAQAAAAAAYPfkOKohyw1nYfMl-bexooWUQ8ZFapxOKi4-v61O8eHn6uW5CH80tTzTnwbQLgmiege55BdeUQb55kxyMOzWTRmIxqQRWUUtkFWTk7e7gUa8OTgcXzsP4UZihGf_pRiH1Yj0qm3JtgX9KuDD4i6fLTAG1mrDZwPvP9mjq5pTHSBNB4YDbXMP9ygG7EfM9Cx2zBSFRHVuzwKelGpdQ9jukA0quounEasat6l34ugxFeimMCkNtsfquoUOQwFI57pXeTtPNe4QxCAtuOjXefvITTHQ2kzz-mTbZ5dsiy0dsPs7Dipd1QDKwTRHDn6ftMz3YfIhLNHuNkCia6Wh4tDKqQf3HSouyM4hJinJN8OQ1GRRdfr6WvH5Plq6ylItbYqSlrEYrBhge5hRYTshJOfiZxYS3-DMJSBJlcAO-8N4WimhxkOU2QupY65ZXD2wgG1L7ffxsfViJvsNlcrM4l5wnAyNvlgcuriqQfN8d2suD_L2sD_l817c5CRR65VXEIfYGsPxHg1b9hl-WVVA7zJ2Z0zCYU9h1_szp3v5Z2OvAVVPp_XB0lLKT3GktfPv5_G_q0CN62JFXgv5vAzwbe8PsSnQuSAp_vD010YkQRivMrGv8rwDKtGkOyE7v7Q7jw3ADmkAPjMJB_9zananFkND0A6B5M5pYXKK05BEBC7bo833akKNcgjoPZMLps57VGBrnxpyQiuiBXdSm2hbfHgi5IZfQ3DlQBjAui-iSxdcrCuV_AOmrX1_xRSPuQqsCMwkQfvzoMiUzT0ekLEnjoLrazFHoh-T3cfBqs-mJjfDqk0gGOglN1H-p2QvweBptD5MrwTHMeOvo4YBndhs4v4AhRUgJnWKUOf9pRnn5VKM-m53_ydcFezjMti2pYMWYEu9zzgY7jDyYhnsHb8mn17r5yAA",
+  "user_code": "AUWUV6RY2",
+  "verification_uri": "https://login.microsoft.com/device",
+  "expires_at": 1776486120460,
+  "interval": 5,
+  "scopes": [
+    "offline_access",
+    "User.Read",
+    "Files.ReadWrite.All",
+    "Sites.ReadWrite.All",
+    "Chat.Read",
+    "Chat.ReadWrite"
+  ],
+  "client_id": "14d82eec-204b-4c2f-b7e8-296a70dab67e",
+  "started_at": 1776485220460
+}

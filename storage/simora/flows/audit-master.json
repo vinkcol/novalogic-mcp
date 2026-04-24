@@ -1,0 +1,64 @@
+{
+  "description": "Master workflow for deep audit of Simora OneDrive (5.753 nodes, 27GB, 8 áreas de negocio). Orchestrates 5 phases sequentially. Each phase produces a structured report under reports/audit/YYYY-MM-DD/.",
+  "domain": "audit",
+  "owner": "Simora ops + Novalogic team",
+  "status": "active",
+  "scale": {
+    "total_nodes": 5753,
+    "folders": 839,
+    "files": 4914,
+    "total_bytes": 28000000000,
+    "top_areas": [
+      "Área_Marketing (25.8 GB)",
+      "Área_Contabilidad (782 MB)",
+      "Área_Logística Simora (579 MB)",
+      "Área_Diseño Simora (145 MB)",
+      "Área_RRHH (133 MB)",
+      "Área_Ventas (82 MB)",
+      "Área_Producción (23 MB)"
+    ]
+  },
+  "preconditions": [
+    "Graph simora-onedrive populated via tenant_ms_onedrive_snapshot (run with max_depth=20)",
+    "Folder handles anchored in storage/simora/integrations/microsoft.json"
+  ],
+  "phases": [
+    {
+      "id": 1,
+      "name": "inventory-and-classification",
+      "flow": "audit-phase-1-inventory",
+      "description": "Classify every file by type (spreadsheet/pdf/image/etc.) + produce summary stats per area, year, category",
+      "output": "reports/audit/<date>/01-inventory.md"
+    },
+    {
+      "id": 2,
+      "name": "duplicate-detection",
+      "flow": "audit-phase-2-duplicates",
+      "description": "Detect duplicate files by (name, size) across the entire tree. Quantifies wasted storage.",
+      "output": "reports/audit/<date>/02-duplicates.md"
+    },
+    {
+      "id": 3,
+      "name": "per-area-deep-dive",
+      "flow": "audit-phase-3-per-area",
+      "description": "For each area (Contabilidad, Logística, Marketing, RRHH, Ventas, Producción, Diseño) produce a targeted report: key files, gaps in time-series (missing months), classification breakdown.",
+      "output": "reports/audit/<date>/03-areas/<area>.md"
+    },
+    {
+      "id": 4,
+      "name": "content-extraction",
+      "flow": "audit-phase-4-extraction",
+      "description": "Download + parse key XLSX / PDF for accounting (extractos, estado_cuenta) and logistics (reportes courier) into structured datasets. Extracts data without loss for downstream cruces.",
+      "output": "datasets/<file> + reports/audit/<date>/04-extraction.md"
+    },
+    {
+      "id": 5,
+      "name": "cleanup-and-recommendations",
+      "flow": "audit-phase-5-cleanup",
+      "description": "Cross-reference duplicates + orphan/empty files + misplaced items (by name pattern vs parent area). Produces actionable cleanup list.",
+      "output": "reports/audit/<date>/05-cleanup.md"
+    }
+  ],
+  "final_deliverable": "reports/audit/<date>/00-executive-summary.md — aggregated findings, top risks, recommended actions",
+  "tags": ["audit", "onedrive", "deep-audit", "cleanup"]
+}

@@ -1,0 +1,62 @@
+{
+  "description": "Phase 4: Content extraction — download + parse the most relevant XLSX (accounting statements, courier reports) to structured data. Selective: only files in key accounting/logistics folders + limited to recent years.",
+  "domain": "audit",
+  "inputs": { "audit_date": "YYYY-MM-DD", "year_filter": "YYYY (optional — default current year)" },
+  "targets": [
+    {
+      "name": "bank-statements-2025",
+      "parent_handle": "accounting.extractos_2025",
+      "file_filter": "*.xlsx, *.pdf"
+    },
+    {
+      "name": "courier-reports-domiflash",
+      "parent_handle": "logistics.courier_reportes_domiflash",
+      "file_filter": "*.xlsx"
+    },
+    {
+      "name": "transfers-log",
+      "parent_handle": "accounting.registro_transferencias",
+      "file_filter": "*.xlsx"
+    }
+  ],
+  "steps_per_target": [
+    {
+      "tool": "graph_nodes_list",
+      "args": {
+        "graph": "simora-onedrive",
+        "parent_key": "{{target.parent_handle_value}}",
+        "type": "file"
+      },
+      "saveAs": "files",
+      "note": "List files under the target folder"
+    },
+    {
+      "note": "AGENT: Filter files by filter pattern + by year_filter if present. For each selected file:"
+    },
+    {
+      "tool": "tenant_ms_download_to_dataset",
+      "args": { "slug": "simora", "item_id": "{{file.key}}", "drive_id": "{{file.properties.drive_id}}" },
+      "saveAs": "download",
+      "note": "Per-file. Downloads to storage/simora/datasets/<name>"
+    },
+    {
+      "tool": "tenant_dataset_read_excel",
+      "args": { "slug": "simora", "file": "{{download.file}}", "maxRows": 5000 },
+      "saveAs": "parsed",
+      "note": "Per-file (XLSX only). PDF needs separate OCR pipeline."
+    },
+    {
+      "note": "AGENT: Persist parsed structure as JSON in datasets/extracted/<item_id>.json (manually via tenant_dataset_read or storing via another tool). For the audit report, tally rows per file + column schema inferred."
+    },
+    {
+      "tool": "tenant_report_save",
+      "args": {
+        "slug": "simora",
+        "name": "audit/{{inputs.audit_date}}/04-extraction",
+        "content": "<AGENT-GENERATED: table with file, rows, columns_inferred, size_on_disk>"
+      }
+    }
+  ],
+  "output": { "type": "report+datasets", "target": "reports/audit/{{inputs.audit_date}}/04-extraction.md + datasets/" },
+  "tags": ["audit", "extraction", "xlsx", "pdf"]
+}

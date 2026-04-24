@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "description": "Mapeo de categorías Novalogic a cuentas contables del plan de Simora (entregado por el contador).",
+    "updated_at": "2026-04-15"
+  },
+  "ventas_pos": "4135-01",
+  "ventas_ecommerce": "4135-02",
+  "envio_cobrado": "4135-03",
+  "costo_envio_pagado": "5295-01",
+  "costo_inventario": "6135-01",
+  "descuento_promocional": "5395-01",
+  "devoluciones": "4175-01"
+}

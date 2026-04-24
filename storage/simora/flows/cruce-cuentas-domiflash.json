@@ -1,0 +1,175 @@
+{
+  "description": "Flujo de conciliacion entre entregas del courier Domiflash (simora.courier_deliveries) y ventas/envios en Novalogic. Detecta facturas faltantes, valores discrepantes, ventas huerfanas y reagendadas. Actualiza estados de envio en Novalogic con trazabilidad completa.",
+  "version": "2.0",
+  "trigger": "manual",
+  "inputs": {
+    "fecha": "Fecha de entrega a conciliar (YYYY-MM-DD)",
+    "slug": "Tenant slug (simora)"
+  },
+  "state_machine": {
+    "in_preparation": [
+      "out_for_dispatch"
+    ],
+    "out_for_dispatch": [
+      "in_transit"
+    ],
+    "in_transit": [
+      "delivered",
+      "returned"
+    ]
+  },
+  "steps": [
+    {
+      "id": "step_1",
+      "name": "Obtener entregas Domiflash del dia desde Simora",
+      "tool": "tenant_simora_query",
+      "args": {
+        "sql": "SELECT id, raw_row->>'Factura' as factura, raw_row->>'Fecha ' as fecha, raw_row->>'Cliente' as cliente, raw_row->>'Destino' as destino, raw_row->>&#39; Valor&#39; as valor, raw_row->>&#39; Flete&#39; as flete, raw_row->>'Cobro' as cobro, raw_row->>'Novedad' as novedad, raw_row->>'Visita' as visita FROM simora.courier_deliveries WHERE report_id = (SELECT id FROM simora.courier_reports WHERE period_year = :year AND period_month = :month AND courier = 'domiflash') AND (raw_row->>'Fecha ' LIKE ':iso_date_dd_mm%' OR raw_row->>'Fecha ' = ':str_date_dd_mm_yyyy')"
+      },
+      "notes": [
+        "Fecha ISO con dia/mes invertido: 2026-01-04T = 01/04/2026",
+        "Campo 'Fecha ' con trailing space",
+        "Campos ' Valor' y ' Flete' con leading space",
+        "Valor '$  -  ' significa campo vacio en Excel, usar Novalogic como fuente de verdad"
+      ],
+      "saveAs": "simora_deliveries"
+    },
+    {
+      "id": "step_2",
+      "name": "Obtener ventas Novalogic del dia",
+      "tool": "sales_ops_list",
+      "args": {
+        "date_from": ":fecha",
+        "date_to": ":fecha",
+        "limit": 100
+      },
+      "notes": [
+        "Novalogic usa saleNumber VTA-XXXX, no MAG",
+        "trackingNumber MAG ya esta en shippingInfo.trackingNumber de cada venta",
+        "Cruce por customerName normalizado (sin tildes, lowercase, primeros 2 tokens) + valor"
+      ],
+      "saveAs": "novalogic_sales"
+    },
+    {
+      "id": "step_3",
+      "name": "Cruce y clasificacion",
+      "tool": "internal_script",
+      "categories": {
+        "OK": "Match nombre + valor exacto",
+        "DIFF_VALOR": "Match nombre, valor diferente (revisar si es campo vacio en Excel)",
+        "FALTA_EN_NOVA": "En Domiflash sin venta en Novalogic ese dia - buscar en ±2 dias (puede ser reagendada)",
+        "EXTRA_EN_NOVA": "Venta en Novalogic sin entrega Domiflash ese dia"
+      },
+      "reagendada_check": "Si FALTA_EN_NOVA: buscar factura en simora.courier_deliveries para otros dias y verificar si hay venta Novalogic en esa fecha anterior",
+      "saveAs": "cruce_resultado"
+    },
+    {
+      "id": "step_4",
+      "name": "Guardar mapping factura -> sale_id",
+      "tool": "tenant_mapping_upsert",
+      "args": {
+        "slug": ":slug",
+        "name": "factura-to-sale-id",
+        "entries": ":cruce_resultado.matches"
+      },
+      "notes": [
+        "Solo para facturas con match confirmado",
+        "Merge (replace=false) para no sobreescribir entradas previas"
+      ]
+    },
+    {
+      "id": "step_5",
+      "name": "Buscar envios Novalogic de las reagendadas",
+      "tool": "shipments_ops_list",
+      "args": {
+        "date_from": ":fecha_original - 5 dias",
+        "date_to": ":fecha",
+        "limit": 100
+      },
+      "notes": [
+        "Iterar paginas si hay mas de 100",
+        "Buscar por trackingNumber (MAG) o saleId en el resultado",
+        "Guardar shipment_id y rowVersion para cada factura"
+      ],
+      "saveAs": "shipments_map"
+    },
+    {
+      "id": "step_6",
+      "name": "Guardar mapping factura -> shipment_id",
+      "tool": "tenant_mapping_upsert",
+      "args": {
+        "slug": ":slug",
+        "name": "factura-to-shipment-id",
+        "entries": ":shipments_map"
+      }
+    },
+    {
+      "id": "step_7a",
+      "name": "Avanzar envios: in_preparation -> out_for_dispatch",
+      "tool": "shipments_ops_change_status",
+      "for_each": ":reagendadas",
+      "args": {
+        "shipment_id": ":item.shipment_id",
+        "status": "out_for_dispatch",
+        "row_version": ":item.rowVersion",
+        "notes": "Conciliacion Simora :fecha | Factura :item.factura | Avance de estado para reflejar novedad real"
+      },
+      "notes": [
+        "Solo aplicar si status actual es in_preparation",
+        "rowVersion es requerido para control de concurrencia optimista"
+      ]
+    },
+    {
+      "id": "step_7b",
+      "name": "Avanzar envios: out_for_dispatch -> in_transit",
+      "tool": "shipments_ops_change_status",
+      "for_each": ":reagendadas",
+      "args": {
+        "shipment_id": ":item.shipment_id",
+        "status": "in_transit",
+        "row_version": ":item.rowVersion + 1",
+        "notes": "Conciliacion Simora :fecha | Factura :item.factura | En ruta hacia :item.cliente - :item.ciudad"
+      }
+    },
+    {
+      "id": "step_7c",
+      "name": "Estado final segun novedad Domiflash",
+      "tool": "shipments_ops_change_status",
+      "for_each": ":reagendadas",
+      "status_map": {
+        "ENTREGADO": "delivered",
+        "DEVOLUCION": "returned",
+        "REPROGRAMADO": "rescheduled",
+        "RETENIDO": "on_hold"
+      },
+      "args": {
+        "shipment_id": ":item.shipment_id",
+        "status": ":status_map[item.novedad]",
+        "row_version": ":item.rowVersion + 2",
+        "notes": "Conciliacion Simora :fecha | Factura :item.factura | :item.novedad (:item.visita visita) | Reagendada desde :item.fecha_original (:item.novedad_original) | Cliente: :item.cliente, :item.ciudad | Fuente: simora.courier_deliveries id=:item.simora_id, report_id=:item.report_id"
+      },
+      "side_effects": {
+        "delivered": "Genera asiento contable de ingreso en Novalogic",
+        "returned": "Restaura inventario desde carrier y registra costo de devolucion"
+      }
+    },
+    {
+      "id": "step_8",
+      "name": "Guardar contexto del cruce ejecutado",
+      "tool": "tenant_context_save",
+      "args": {
+        "slug": ":slug",
+        "context": "Ver ultimo resultado en mapping cruce-resultados-diarios"
+      }
+    }
+  ],
+  "known_issues": {
+    "date_inversion": "Parser XLSX Domiflash invierte dia/mes en ISO. 01/04/2026 -> 2026-01-04T. Dias > 12 se almacenan como string DD/MM/YYYY.",
+    "valor_cero": "Campo ' Valor' vacio en Excel aparece como '$ -'. Novalogic es fuente de verdad para montos.",
+    "campos_espacios": "Claves raw_row: 'Fecha ' (trailing), ' Valor' y ' Flete' (leading).",
+    "parsed_fields_null": "Columnas estructuradas de courier_deliveries todas en NULL. Solo usar raw_row.",
+    "state_machine": "No se pueden saltar estados. Ruta obligatoria: in_preparation -> out_for_dispatch -> in_transit -> delivered/returned.",
+    "shipments_pagination": "shipments_ops_list devuelve max 100 por pagina ordenado por MAG desc. Iterar paginas para tracking numbers bajos.",
+    "no_fk": "No hay FK entre simora y Novalogic. Cruce siempre por nombre + valor. Mejora pendiente: poblar simora.courier_deliveries.novalogic_shipment_id post-conciliacion."
+  }
+}

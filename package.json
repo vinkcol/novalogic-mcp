@@ -1,0 +1,32 @@
+{
+  "name": "novalogic-mcp",
+  "version": "1.0.0",
+  "description": "Novalogic MCP Server - Multi-agent context management for Claude Code",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "db:init": "tsx src/db/init-db.ts",
+    "embed": "node scripts/embed-memories.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@playwright/mcp": "^0.0.68",
+    "exceljs": "^4.4.0",
+    "mongodb": "^6.21.0",
+    "pg": "^8.13.1",
+    "pgvector": "^0.2.0",
+    "playwright": "^1.59.0-alpha-1771104257000",
+    "sharp": "^0.34.5",
+    "tesseract.js": "^7.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "description": "Cruza extracto bancario (dataset CSV) contra ventas Novalogic del período — identifica depósitos sin venta, ventas sin depósito, y diferencias de monto.",
+  "inputs": {
+    "dataset": "nombre del archivo en storage/simora/datasets/ (ej. '2026-04-bank-bancolombia.csv')",
+    "dateFrom": "ISO date",
+    "dateTo": "ISO date"
+  },
+  "steps": [
+    {
+      "tool": "tenant_dataset_read",
+      "args": { "slug": "simora", "file": "{{inputs.dataset}}", "lines": 500 },
+      "saveAs": "bank"
+    },
+    {
+      "tool": "sales_ops_list",
+      "args": {
+        "companyId": "2af87e54-33a6-4a60-9b88-63582d3edacb",
+        "startDate": "{{inputs.dateFrom}}",
+        "endDate": "{{inputs.dateTo}}",
+        "pageSize": 500
+      },
+      "saveAs": "sales"
+    },
+    {
+      "note": "Agent debe: (1) parsear CSV de $bank.preview, (2) hacer match por monto+fecha contra $sales, (3) generar tabla con 3 secciones (matched, bank_only, sales_only), (4) llamar tenant_report_save."
+    }
+  ]
+}

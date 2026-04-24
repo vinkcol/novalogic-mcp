@@ -1,0 +1,22 @@
+# ─── Core data science ───────────────────────────────────────────
+pandas>=2.0
+numpy>=1.26
+matplotlib>=3.8
+seaborn>=0.13
+scikit-learn>=1.4
+
+# ─── Database connectors ─────────────────────────────────────────
+sqlalchemy>=2.0
+psycopg2-binary>=2.9       # PostgreSQL driver
+pymongo>=4.6               # MongoDB legacy source
+
+# ─── File parsing ────────────────────────────────────────────────
+openpyxl>=3.1              # Excel read/write
+tabulate>=0.9              # Pretty-print tables to stdout
+
+# ─── HTTP + utilities ────────────────────────────────────────────
+requests>=2.31
+python-dotenv>=1.0
+
+# Install with:
+#   pip install -r requirements.txt

@@ -1,0 +1,29 @@
+{
+  "description": "Phase 2: Duplicate detection across the full OneDrive tree. Groups by (name, size) — cheap heuristic, does not require downloading content.",
+  "domain": "audit",
+  "inputs": {
+    "audit_date": "YYYY-MM-DD",
+    "min_size": "Ignore files smaller than N bytes (default 1024)"
+  },
+  "steps": [
+    {
+      "tool": "tenant_audit_duplicates",
+      "args": { "graph": "simora-onedrive", "min_size": 10240 },
+      "saveAs": "dups",
+      "note": "Returns groups[] with {name, size, copies, instances[]}"
+    },
+    {
+      "note": "AGENT: Build markdown table of top duplicate groups by (copies DESC, size DESC). Show: name, size, copies, total wasted bytes per group. Summarize estimated_wasted_bytes in GB. Add a 'recommended actions' section (keep newest? manual review?)."
+    },
+    {
+      "tool": "tenant_report_save",
+      "args": {
+        "slug": "simora",
+        "name": "audit/{{inputs.audit_date}}/02-duplicates",
+        "content": "<AGENT-GENERATED markdown>"
+      }
+    }
+  ],
+  "output": { "type": "report", "target": "reports/audit/{{inputs.audit_date}}/02-duplicates.md" },
+  "tags": ["audit", "duplicates", "cleanup"]
+}

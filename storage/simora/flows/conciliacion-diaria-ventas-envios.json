@@ -1,0 +1,90 @@
+{
+  "description": "Workflow para conciliar ventas agendadas con sus envíos para un día específico. Cruza el estado de cada venta con el estado de su envío asociado, calculando margen de flete. Útil para identificar órdenes sin envío, envíos sin venta, y rentabilidad por día.",
+  "trigger": "Manual — se ejecuta por fecha (YYYY-MM-DD)",
+  "domain_notes": [
+    "Ventas (sales.sales) y Envíos (logistics.shipments) son dominios SEPARADOS",
+    "Una venta puede no tener envío todavía (estado 'pending' o 'confirmed')",
+    "Un envío siempre tiene saleId pero la venta puede haber cambiado de estado",
+    "Estados de venta: pending, confirmed, completed, cancelled",
+    "Estados de envío: pending, in_preparation, out_for_dispatch, in_transit, delivered, rescheduled, on_hold, returned, cancelled, voided"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "description": "Encontrar primer día con actividad de entregas en el periodo",
+      "tool": "accounting_ops_delivery_activity",
+      "args": {
+        "start_date": "YYYY-MM-01",
+        "end_date": "YYYY-MM-DD"
+      },
+      "note": "Devuelve resumen por día: revenue, fleteCost, shippingCharged, shippingMargin. Buscar primer día con datos."
+    },
+    {
+      "step": 2,
+      "description": "Obtener conciliación detallada del día objetivo",
+      "tool": "accounting_ops_daily_reconciliation",
+      "args": {
+        "date": "YYYY-MM-DD"
+      },
+      "output_fields": [
+        "saleNumber",
+        "saleStatus",
+        "customerName",
+        "shippingCost",
+        "total",
+        "trackingNumber",
+        "shipmentStatus",
+        "fleteCost",
+        "carrierName",
+        "shippingMargin"
+      ],
+      "note": "Devuelve una fila por venta con su envío cruzado (LEFT JOIN). Incluye summary breakdown por estado."
+    },
+    {
+      "step": 3,
+      "description": "Cambiar estado de un envío específico si se necesita operar",
+      "tool": "shipments_ops_change_status",
+      "args": {
+        "shipment_id": "<uuid>",
+        "status": "out_for_dispatch",
+        "notes": "Pasado a despacho desde conciliación"
+      },
+      "note": "El cambio de estado dispara evento Socket.io que actualiza el dashboard en tiempo real."
+    },
+    {
+      "step": 4,
+      "description": "Verificar resumen contable del periodo",
+      "tool": "accounting_ops_summary",
+      "args": {
+        "start_date": "YYYY-MM-DD",
+        "end_date": "YYYY-MM-DD"
+      }
+    }
+  ],
+  "real_time_strategy": {
+    "description": "Cuando MCP cambia estado de un envío, el dashboard lo refleja automáticamente sin recargar",
+    "flow": [
+      "MCP llama shipments_ops_change_status",
+      "API → LogisticsService → ShipmentOutcomeService.applyOutcome()",
+      "ShipmentOutcomeService emite 'shipment.statusChanged' vía EventEmitter2",
+      "EventsGateway @OnEvent captura y reemite como 'DomainEvent' vía Socket.io al room companyId",
+      "socketService dashboard recibe DomainEvent con eventType='shipment.status.changed'",
+      "realTimeEventsSaga → put({ type: 'logistics/REFRESH_LOGISTICS_DATA' })",
+      "logisticsRootSaga → refreshLogisticsDataSaga → Redux update → UI live"
+    ],
+    "socket_namespace": "/events",
+    "socket_room": "companyId (UUID)",
+    "socket_event": "DomainEvent",
+    "frontend_event_type": "shipment.status.changed"
+  },
+  "created": "2026-04-17",
+  "tags": [
+    "conciliacion",
+    "contabilidad",
+    "ventas",
+    "envios",
+    "real-time",
+    "accounting",
+    "reconciliation"
+  ]
+}

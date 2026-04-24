@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "source": "Silent Scout - Browser Agent",
+    "sector": "Logística y Transporte",
+    "location": "Bogotá, Colombia",
+    "timestamp": "2026-04-23T17:15:00Z"
+  },
+  "leads": [
+    {
+      "company_name": "Logística Express del Norte",
+      "website": "https://example-logistica-norte.com.co",
+      "signals": ["Falta de tracking en tiempo real", "Proceso de cotización manual vía WhatsApp"],
+      "estimated_size": "Mediana",
+      "pm_fit_score": 8
+    },
+    {
+      "company_name": "Transportes Rápidos Tunja-Bogotá",
+      "website": "https://example-transportes-tunja.com",
+      "signals": ["Sitio web desactualizado", "Quejas de clientes por falta de facturación automática"],
+      "estimated_size": "Pequeña-Mediana",
+      "pm_fit_score": 9
+    },
+    {
+      "company_name": "Bodegajes Siglo XXI",
+      "website": "https://example-bodegajes-21.co",
+      "signals": ["Gestión de inventario manual detectada en ofertas laborales"],
+      "estimated_size": "Grande",
+      "pm_fit_score": 7
+    }
+  ]
+}

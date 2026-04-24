@@ -1,0 +1,72 @@
+{
+  "description": "Concilia cuentas con empresas de mensajería — cruza el reporte del courier (pagos a recaudar + comisiones) contra los envíos registrados en Novalogic, detecta diferencias y genera reporte.",
+  "domain": "logistics",
+  "owner": "finanzas Simora",
+  "status": "draft",
+  "inputs": {
+    "courier": "Nombre del courier (ej. 'servientrega', 'interrapidisimo', 'coordinadora')",
+    "dataset": "Archivo del courier en storage/simora/datasets/ (ej. '2026-04-servientrega-liquidacion.csv')",
+    "dateFrom": "ISO date — inicio período de liquidación",
+    "dateTo": "ISO date — fin período de liquidación"
+  },
+  "preconditions": [
+    "El archivo del courier debe estar cargado en storage/simora/datasets/",
+    "Opcional: mapping 'courier-aliases' con equivalencias de guía/tracking si el courier usa códigos distintos a Novalogic"
+  ],
+  "steps": [
+    {
+      "tool": "tenant_context_get",
+      "args": { "slug": "simora" },
+      "saveAs": "context",
+      "note": "Carga briefing del tenant (companyId, API keys, reglas envío)"
+    },
+    {
+      "tool": "tenant_dataset_read_excel",
+      "args": { "slug": "simora", "file": "{{inputs.dataset}}", "maxRows": 2000 },
+      "saveAs": "courier_data",
+      "note": "Parsea XLSX estructurado. Si es CSV usar tenant_dataset_read. El agente debe inferir columnas (guía, monto_recaudo, comisión, estado, fecha_entrega)"
+    },
+    {
+      "tool": "tenant_mapping_lookup",
+      "args": { "slug": "simora", "name": "courier-aliases", "key": "{{inputs.courier}}" },
+      "saveAs": "courier_alias",
+      "note": "Opcional — si hay alias registrado para normalizar número de guía"
+    },
+    {
+      "tool": "shipments_ops_list",
+      "args": {
+        "companyId": "2af87e54-33a6-4a60-9b88-63582d3edacb",
+        "startDate": "{{inputs.dateFrom}}",
+        "endDate": "{{inputs.dateTo}}",
+        "carrier": "{{inputs.courier}}"
+      },
+      "saveAs": "novalogic_shipments",
+      "note": "Envíos Novalogic en el período, filtrados por carrier"
+    },
+    {
+      "note": "AGENT REASONING — Matching:\n1. Parsear CSV de $courier_data.preview identificando columna de tracking/guía.\n2. Por cada fila del courier, buscar shipment en $novalogic_shipments con mismo tracking (aplicar alias si existe).\n3. Clasificar en 4 buckets:\n   - matched_ok: tracking cruza y montos coinciden\n   - amount_mismatch: tracking cruza pero monto recaudo ≠ shippingCost + COD\n   - courier_only: en courier pero no en Novalogic (posible envío fuera de sistema)\n   - novalogic_only: en Novalogic pero courier no reporta (pendiente cobro/liquidación)\n4. Sumar totales: total_a_recaudar, total_comisiones, total_neto_esperado."
+    },
+    {
+      "tool": "tenant_report_save",
+      "args": {
+        "slug": "simora",
+        "name": "{{inputs.dateTo}}-reconcile-{{inputs.courier}}",
+        "content": "<markdown generado por el agente con: resumen, 4 tablas (matched_ok/amount_mismatch/courier_only/novalogic_only), totales, recomendaciones>"
+      },
+      "saveAs": "report",
+      "note": "Output final en storage/simora/reports/"
+    }
+  ],
+  "output": {
+    "type": "report",
+    "target": "reports/{{inputs.dateTo}}-reconcile-{{inputs.courier}}.md"
+  },
+  "tags": ["mensajería", "conciliación", "logística", "finanzas"],
+  "pending_info": [
+    "Formato exacto del archivo CSV de cada courier (columnas, separador, encoding)",
+    "¿Un solo courier a la vez o consolidado multi-courier?",
+    "¿Comisión viene en el archivo o se calcula aparte por tarifa contratada?",
+    "¿Manejan COD (contraentrega)? Si sí, cómo viene el monto en el CSV",
+    "Tolerancia aceptable en diferencias de monto (ej. ±$100 por redondeo)"
+  ]
+}

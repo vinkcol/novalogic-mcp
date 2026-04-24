@@ -1,0 +1,8 @@
+{
+  "description": "Reglas de envío particulares de Simora / Magibell",
+  "free_shipping_cities": ["Bogotá", "Soacha"],
+  "exceptions": [
+    { "total": 16500, "reason": "Base sola — no aplica envío gratis" },
+    { "total": 25000, "reason": "Base + esmalte — no aplica envío gratis" }
+  ]
+}

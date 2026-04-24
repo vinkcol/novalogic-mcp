@@ -1,0 +1,38 @@
+{
+  "description": "Phase 5: Consolidated cleanup recommendations — combines findings from phases 1-4 + specific rules to produce an actionable list of files to archive, delete, or review.",
+  "domain": "audit",
+  "inputs": { "audit_date": "YYYY-MM-DD" },
+  "cleanup_rules": [
+    { "rule": "duplicates-keep-newest", "description": "For each duplicate group, keep the most recent, mark others as CLEANUP_CANDIDATE" },
+    { "rule": "empty-files", "description": "Files with size=0 — safe to delete" },
+    { "rule": "tmp-drafts", "description": "Files with 'tmp', 'draft', 'copia de', 'copy of' in name and last_modified > 6 months old" },
+    { "rule": "misplaced-by-category", "description": "Files whose category doesn't match the area convention (e.g. image in Área_Contabilidad)" },
+    { "rule": "heavy-videos-in-wrong-area", "description": "Video files >100MB outside Marketing/Recordings" }
+  ],
+  "steps": [
+    {
+      "note": "AGENT: For each rule, execute the corresponding SQL/query via graph_nodes_list filters + post-process. Accumulate findings into a structured list."
+    },
+    {
+      "tool": "tenant_audit_duplicates",
+      "args": { "graph": "simora-onedrive", "min_size": 1024 },
+      "saveAs": "dups"
+    },
+    {
+      "tool": "graph_nodes_list",
+      "args": { "graph": "simora-onedrive", "type": "file", "limit": 1000 },
+      "saveAs": "all_files",
+      "note": "For empty-files filter + draft pattern filter"
+    },
+    {
+      "tool": "tenant_report_save",
+      "args": {
+        "slug": "simora",
+        "name": "audit/{{inputs.audit_date}}/05-cleanup",
+        "content": "<AGENT-GENERATED: sections per rule, each with a markdown table of candidates including web_url for manual review>"
+      }
+    }
+  ],
+  "output": { "type": "report", "target": "reports/audit/{{inputs.audit_date}}/05-cleanup.md" },
+  "tags": ["audit", "cleanup", "recommendations"]
+}

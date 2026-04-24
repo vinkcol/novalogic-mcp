@@ -1,0 +1,31 @@
+{
+  "description": "Genera export contable mensual para el contador de Simora — cruza movimientos Novalogic con chart-of-accounts y produce un .md con la tabla lista para copiar al formato del contador.",
+  "inputs": {
+    "dateFrom": "ISO date — inicio período",
+    "dateTo": "ISO date — fin período"
+  },
+  "steps": [
+    {
+      "tool": "tenant_context_get",
+      "args": { "slug": "simora" },
+      "saveAs": "context"
+    },
+    {
+      "tool": "tenant_mapping_get",
+      "args": { "slug": "simora", "name": "chart-of-accounts" },
+      "saveAs": "accounts"
+    },
+    {
+      "tool": "sales_revenue_summary",
+      "args": {
+        "companyId": "2af87e54-33a6-4a60-9b88-63582d3edacb",
+        "startDate": "{{inputs.dateFrom}}",
+        "endDate": "{{inputs.dateTo}}"
+      },
+      "saveAs": "revenue"
+    },
+    {
+      "note": "Agent debe: (1) por cada categoría en $revenue buscar su cuenta en $accounts.data, (2) construir filas Débito/Crédito, (3) llamar tenant_report_save con el markdown resultante."
+    }
+  ]
+}

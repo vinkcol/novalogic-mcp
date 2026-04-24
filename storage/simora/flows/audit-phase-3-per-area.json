@@ -1,0 +1,49 @@
+{
+  "description": "Phase 3: Per-area deep audit. Produces one markdown report per business area using folder handles from integrations/microsoft.json. Detects time-series gaps (missing months) in accounting/logistics folders.",
+  "domain": "audit",
+  "inputs": { "audit_date": "YYYY-MM-DD" },
+  "areas": [
+    { "name": "contabilidad", "handle": "accounting.area_contabilidad_root", "gap_targets": ["extractos_2023", "extractos_2024", "extractos_2025"] },
+    { "name": "logistica", "handle": "logistics.area_logistica_root", "gap_targets": ["registro_planillas_diarias"] },
+    { "name": "marketing", "handle": "business.area_marketing", "gap_targets": [] },
+    { "name": "rrhh", "handle": "business.area_recursos_humanos", "gap_targets": [] },
+    { "name": "ventas", "handle": "business.area_ventas", "gap_targets": [] },
+    { "name": "produccion", "handle": "business.area_produccion", "gap_targets": [] },
+    { "name": "diseno", "handle": "business.area_diseno", "gap_targets": [] }
+  ],
+  "steps_per_area": [
+    {
+      "tool": "tenant_integration_get",
+      "args": { "slug": "simora", "name": "microsoft" },
+      "saveAs": "integration",
+      "note": "Load folder handles once"
+    },
+    {
+      "tool": "tenant_audit_summary",
+      "args": { "graph": "simora-onedrive", "root_key": "{{area.handle_value}}" },
+      "saveAs": "area_summary"
+    },
+    {
+      "tool": "tenant_audit_gaps",
+      "args": { "graph": "simora-onedrive", "parent_key": "{{gap_target_handle}}" },
+      "saveAs": "gaps",
+      "note": "Run once per gap_target. Returns months_missing[]."
+    },
+    {
+      "tool": "tenant_audit_duplicates",
+      "args": { "graph": "simora-onedrive", "min_size": 10240 },
+      "saveAs": "dups_global",
+      "note": "Filter to area scope in post-process (compare instances[].parent_key against descendants of the area root)"
+    },
+    {
+      "tool": "tenant_report_save",
+      "args": {
+        "slug": "simora",
+        "name": "audit/{{inputs.audit_date}}/03-areas/{{area.name}}",
+        "content": "<AGENT-GENERATED markdown per area: summary, key files top 20 by size, gaps, duplicates scoped to area>"
+      }
+    }
+  ],
+  "output": { "type": "report", "target": "reports/audit/{{inputs.audit_date}}/03-areas/<area>.md" },
+  "tags": ["audit", "per-area"]
+}

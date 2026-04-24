@@ -1,0 +1,55 @@
+{
+  "2026-04-01": {
+    "ejecutado_at": "2026-04-18T03:17:58Z",
+    "total_simora": 18,
+    "total_novalogic": 16,
+    "matches_ok": 11,
+    "valor_cero_excel": 3,
+    "reagendadas": 4,
+    "extras_novalogic": 2,
+    "reagendadas_detalle": [
+      {
+        "factura": "MAG000268",
+        "vta": "VTA-0289",
+        "shipment_id": "df6cc7e4-e7cc-41fd-8644-c2f6321041bf",
+        "trayectoria": "31/03 RETENIDO -> 01/04 DEVOLUCION",
+        "estado_final": "returned"
+      },
+      {
+        "factura": "MAG000282",
+        "vta": "VTA-0309",
+        "shipment_id": "38f0e195-6b0d-44bd-896e-a816fd6e30e9",
+        "trayectoria": "31/03 REPROGRAMADO -> 01/04 ENTREGADO",
+        "estado_final": "delivered"
+      },
+      {
+        "factura": "MAG000286",
+        "vta": "VTA-0283",
+        "shipment_id": "4764d458-ce41-4264-a0c9-c4a01bc1f483",
+        "trayectoria": "31/03 REPROGRAMADO -> 01/04 ENTREGADO",
+        "estado_final": "delivered"
+      },
+      {
+        "factura": "MAG000288",
+        "vta": "VTA-0312",
+        "shipment_id": "7312f4e1-fc85-47d5-986d-745c92d7e108",
+        "trayectoria": "31/03 REPROGRAMADO -> 01/04 DEVOLUCION",
+        "estado_final": "returned"
+      }
+    ],
+    "extras_detalle": [
+      {
+        "vta": "VTA-0326",
+        "cliente": "Angie Bedoya",
+        "valor": 30000,
+        "pendiente": "verificar fecha real de entrega"
+      },
+      {
+        "vta": "VTA-0327",
+        "cliente": "Teresa Torres de Gutierrez",
+        "valor": 28500,
+        "pendiente": "verificar fecha real de entrega"
+      }
+    ]
+  }
+}

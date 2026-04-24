@@ -1,0 +1,40 @@
+{
+  "description": "Phase 1: Inventory + classification of the entire OneDrive snapshot. Classifies each file by extension heuristic and produces a breakdown by category/year/area.",
+  "domain": "audit",
+  "inputs": {
+    "audit_date": "YYYY-MM-DD (defaults to today)"
+  },
+  "steps": [
+    {
+      "tool": "tenant_audit_classify",
+      "args": { "graph": "simora-onedrive" },
+      "saveAs": "classification",
+      "note": "Writes 'category' property into every node (folder, spreadsheet, pdf, image, etc.)"
+    },
+    {
+      "tool": "tenant_audit_summary",
+      "args": { "graph": "simora-onedrive" },
+      "saveAs": "global_summary",
+      "note": "Global stats: totals, by_category, by_year, top_level_areas"
+    },
+    {
+      "tool": "tenant_audit_summary",
+      "args": { "graph": "simora-onedrive", "root_key": "01NXFPQLIM2L4OQ3JRG5FYBGA4NSNZU7NU" },
+      "saveAs": "control_interno_summary",
+      "note": "Stats scoped to CONTROL INTERNO (business core)"
+    },
+    {
+      "note": "AGENT: Compose a markdown report combining classification.breakdown + global_summary.by_category + global_summary.by_year + top_level_areas + control_interno_summary. Include pretty-printed byte sizes and percentages."
+    },
+    {
+      "tool": "tenant_report_save",
+      "args": {
+        "slug": "simora",
+        "name": "audit/{{inputs.audit_date}}/01-inventory",
+        "content": "<AGENT-GENERATED markdown>"
+      }
+    }
+  ],
+  "output": { "type": "report", "target": "reports/audit/{{inputs.audit_date}}/01-inventory.md" },
+  "tags": ["audit", "inventory"]
+}
