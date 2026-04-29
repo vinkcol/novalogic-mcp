@@ -632,4 +632,23 @@ export const tools = {
       return ok({ api_keys: res.data });
     },
   },
+
+  admin_ops_hard_delete_user: {
+    description: '[Admin Ops] Hard delete de un usuario (IRREVERSIBLE). Elimina user_roles, refresh_tokens, credentials y el user.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        user_id: { type: 'string', description: 'UUID del usuario a eliminar' },
+        email: { type: 'string', description: 'Email del usuario (confirmacion visual)' },
+      },
+      required: ['user_id'],
+    },
+    handler: async (args: any) => {
+      if (!args.user_id) return err('user_id es requerido');
+      const res = await api.del(`/admin/users/${args.user_id}/hard`);
+      if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
+      return ok({}, `Usuario ${args.email || args.user_id} eliminado permanentemente`);
+    },
+  },
+
 };
