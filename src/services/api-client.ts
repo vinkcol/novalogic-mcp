@@ -33,6 +33,7 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 const API_KEY = process.env.NOVALOGIC_API_KEY || '';
+const DEFAULT_COMPANY_ID = process.env.NOVALOGIC_COMPANY_ID || '';
 
 process.stderr.write(
   `[api-client] Target: ${API_BASE}/internal (env=${process.env.NOVALOGIC_ENV || 'development'})\n`,
@@ -40,6 +41,9 @@ process.stderr.write(
 
 if (!API_KEY) {
   process.stderr.write('[api-client] WARNING: NOVALOGIC_API_KEY not set\n');
+}
+if (DEFAULT_COMPANY_ID) {
+  process.stderr.write(`[api-client] Default tenant: ${DEFAULT_COMPANY_ID}\n`);
 }
 
 export interface ApiResponse<T = any> {
@@ -52,15 +56,22 @@ export async function apiRequest<T = any>(
   method: string,
   path: string,
   body?: any,
+  companyId?: string,
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE}/internal${path}`;
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  };
+  const effectiveCompanyId = companyId || DEFAULT_COMPANY_ID;
+  if (effectiveCompanyId) {
+    headers['x-company-id'] = effectiveCompanyId;
+  }
+
   const opts: RequestInit = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
-    },
+    headers,
   };
 
   if (body !== undefined) {
@@ -86,17 +97,20 @@ export async function apiRequest<T = any>(
  * Raw GET — returns the Fetch Response without JSON parsing.
  * Needed for binary endpoints (e.g. backup downloads).
  */
-export async function apiGetRaw(path: string): Promise<Response> {
+export async function apiGetRaw(path: string, companyId?: string): Promise<Response> {
   const url = `${API_BASE}/internal${path}`;
-  return fetch(url, { method: 'GET', headers: { 'x-api-key': API_KEY } });
+  const headers: Record<string, string> = { 'x-api-key': API_KEY };
+  const effectiveCompanyId = companyId || DEFAULT_COMPANY_ID;
+  if (effectiveCompanyId) headers['x-company-id'] = effectiveCompanyId;
+  return fetch(url, { method: 'GET', headers });
 }
 
 export const api = {
-  get: <T = any>(path: string) => apiRequest<T>('GET', path),
-  post: <T = any>(path: string, body?: any) => apiRequest<T>('POST', path, body),
-  put: <T = any>(path: string, body?: any) => apiRequest<T>('PUT', path, body),
-  del: <T = any>(path: string) => apiRequest<T>('DELETE', path),
-  patch: <T = any>(path: string, body?: any) =>
-    apiRequest<T>('PATCH', path, body),
-  getRaw: (path: string) => apiGetRaw(path),
+  get: <T = any>(path: string, companyId?: string) => apiRequest<T>('GET', path, undefined, companyId),
+  post: <T = any>(path: string, body?: any, companyId?: string) => apiRequest<T>('POST', path, body, companyId),
+  put: <T = any>(path: string, body?: any, companyId?: string) => apiRequest<T>('PUT', path, body, companyId),
+  del: <T = any>(path: string, companyId?: string) => apiRequest<T>('DELETE', path, undefined, companyId),
+  patch: <T = any>(path: string, body?: any, companyId?: string) =>
+    apiRequest<T>('PATCH', path, body, companyId),
+  getRaw: (path: string, companyId?: string) => apiGetRaw(path, companyId),
 };

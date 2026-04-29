@@ -24,10 +24,20 @@ export interface AgentDefinition {
 }
 
 // ─── Area Definition ──────────────────────────────────────────
+
+/**
+ * Layer separates concerns physically:
+ * - app:      Tools that operate business data (sales, customers, inventory, etc.)
+ * - platform: Tools that build/maintain the platform (engineering, QA, knowledge)
+ * - strategy: Tools for business strategy and growth (pricing, content, scraping)
+ */
+export type AreaLayer = 'app' | 'platform' | 'strategy';
+
 export interface AreaDefinition {
   id: string;
   name: string;
   description: string;
+  layer: AreaLayer;
   leadAgentId: string;
   agentIds: string[];
   dependencies?: string[];
