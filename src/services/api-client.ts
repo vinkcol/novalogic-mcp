@@ -9,41 +9,97 @@
  *   NOVALOGIC_API_URL_STAGING - staging API URL (default: https://staging-api.novalogic.com.co/api/v1)
  *   NOVALOGIC_API_URL_PROD    - production API URL (default: https://api.novalogic.com.co/api/v1)
  *   NOVALOGIC_API_KEY         - internal API key
+ *
+ * Runtime override:
+ *   Use setRuntimeEnv() to switch environment per-session (stdio = per Claude instance).
+ *   This does NOT modify .env files — it only changes the in-memory target for this process.
  */
 
-const LOCAL_URL = 'http://localhost:3005/api/v1';
-const STAGING_URL = 'https://staging-api.novalogic.com.co/api/v1';
-const PROD_URL = 'https://api.novalogic.com.co/api/v1';
+export type ApiEnv = 'development' | 'staging' | 'production';
 
-function resolveApiBase(): string {
+const ENV_CONFIG: Record<ApiEnv, { urlEnv: string; urlDefault: string; keyEnv: string }> = {
+  development: {
+    urlEnv: 'NOVALOGIC_API_URL_LOCAL',
+    urlDefault: 'http://localhost:3005/api/v1',
+    keyEnv: 'NOVALOGIC_API_KEY',
+  },
+  staging: {
+    urlEnv: 'NOVALOGIC_API_URL_STAGING',
+    urlDefault: 'http://localhost:3015/api/v1',
+    keyEnv: 'NOVALOGIC_API_KEY',
+  },
+  production: {
+    urlEnv: 'NOVALOGIC_API_URL_PROD',
+    urlDefault: 'https://api.novalogic.com.co/api/v1',
+    keyEnv: 'NOVALOGIC_API_KEY_PROD',
+  },
+};
+
+function resolveApiBase(env?: ApiEnv): string {
   if (process.env.NOVALOGIC_API_URL) return process.env.NOVALOGIC_API_URL;
 
-  const env = (process.env.NOVALOGIC_ENV || 'development').toLowerCase();
-
-  if (env === 'staging') {
-    return process.env.NOVALOGIC_API_URL_STAGING || STAGING_URL;
-  }
-
-  if (env === 'production') {
-    return process.env.NOVALOGIC_API_URL_PROD || PROD_URL;
-  }
-
-  return process.env.NOVALOGIC_API_URL_LOCAL || LOCAL_URL;
+  const target = env || (process.env.NOVALOGIC_ENV || 'development').toLowerCase() as ApiEnv;
+  const cfg = ENV_CONFIG[target] || ENV_CONFIG.development;
+  return process.env[cfg.urlEnv] || cfg.urlDefault;
 }
 
-const API_BASE = resolveApiBase();
-const API_KEY = process.env.NOVALOGIC_API_KEY || '';
-const DEFAULT_COMPANY_ID = process.env.NOVALOGIC_COMPANY_ID || '';
+function resolveApiKey(env?: ApiEnv): string {
+  const target = env || (process.env.NOVALOGIC_ENV || 'development').toLowerCase() as ApiEnv;
+  if (target === 'production' && process.env.NOVALOGIC_API_KEY_PROD) {
+    return process.env.NOVALOGIC_API_KEY_PROD;
+  }
+  return process.env.NOVALOGIC_API_KEY || '';
+}
+
+// ── Runtime state (mutable per-session) ──────────────────────────────────────
+
+const startup = {
+  env: (process.env.NOVALOGIC_ENV || 'development').toLowerCase() as ApiEnv,
+  apiBase: resolveApiBase(),
+  apiKey: resolveApiKey(),
+  companyId: process.env.NOVALOGIC_COMPANY_ID || '',
+};
+
+let runtime: { env: ApiEnv; apiBase: string; apiKey: string; companyId: string } = { ...startup };
+
+/** Switch the API target for this session. Does NOT touch .env files. */
+export function setRuntimeEnv(env: ApiEnv, opts?: { apiKey?: string; companyId?: string }): {
+  env: ApiEnv; apiBase: string; companyId: string;
+} {
+  const apiBase = resolveApiBase(env);
+  const apiKey = opts?.apiKey || resolveApiKey(env);
+  const companyId = opts?.companyId ?? runtime.companyId;
+
+  runtime = { env, apiBase, apiKey, companyId };
+
+  process.stderr.write(
+    `[api-client] Session switched → ${env} | ${apiBase}/internal | tenant=${companyId || '(default)'}\n`,
+  );
+
+  return { env: runtime.env, apiBase: runtime.apiBase, companyId: runtime.companyId };
+}
+
+/** Get current runtime config (read-only snapshot). */
+export function getRuntimeEnv() {
+  return {
+    env: runtime.env,
+    apiBase: runtime.apiBase,
+    companyId: runtime.companyId,
+    startupEnv: startup.env,
+  };
+}
+
+// ── Startup log ──────────────────────────────────────────────────────────────
 
 process.stderr.write(
-  `[api-client] Target: ${API_BASE}/internal (env=${process.env.NOVALOGIC_ENV || 'development'})\n`,
+  `[api-client] Target: ${runtime.apiBase}/internal (env=${runtime.env})\n`,
 );
 
-if (!API_KEY) {
+if (!runtime.apiKey) {
   process.stderr.write('[api-client] WARNING: NOVALOGIC_API_KEY not set\n');
 }
-if (DEFAULT_COMPANY_ID) {
-  process.stderr.write(`[api-client] Default tenant: ${DEFAULT_COMPANY_ID}\n`);
+if (runtime.companyId) {
+  process.stderr.write(`[api-client] Default tenant: ${runtime.companyId}\n`);
 }
 
 export interface ApiResponse<T = any> {
@@ -58,13 +114,13 @@ export async function apiRequest<T = any>(
   body?: any,
   companyId?: string,
 ): Promise<ApiResponse<T>> {
-  const url = `${API_BASE}/internal${path}`;
+  const url = `${runtime.apiBase}/internal${path}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'x-api-key': API_KEY,
+    'x-api-key': runtime.apiKey,
   };
-  const effectiveCompanyId = companyId || DEFAULT_COMPANY_ID;
+  const effectiveCompanyId = companyId || runtime.companyId;
   if (effectiveCompanyId) {
     headers['x-company-id'] = effectiveCompanyId;
   }
@@ -98,9 +154,9 @@ export async function apiRequest<T = any>(
  * Needed for binary endpoints (e.g. backup downloads).
  */
 export async function apiGetRaw(path: string, companyId?: string): Promise<Response> {
-  const url = `${API_BASE}/internal${path}`;
-  const headers: Record<string, string> = { 'x-api-key': API_KEY };
-  const effectiveCompanyId = companyId || DEFAULT_COMPANY_ID;
+  const url = `${runtime.apiBase}/internal${path}`;
+  const headers: Record<string, string> = { 'x-api-key': runtime.apiKey };
+  const effectiveCompanyId = companyId || runtime.companyId;
   if (effectiveCompanyId) headers['x-company-id'] = effectiveCompanyId;
   return fetch(url, { method: 'GET', headers });
 }

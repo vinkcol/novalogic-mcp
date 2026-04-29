@@ -1,4 +1,5 @@
 import { query } from '../../../../db/client.js';
+import { setRuntimeEnv, getRuntimeEnv, type ApiEnv } from '../../../../services/api-client.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -391,6 +392,54 @@ Provide a summary to make future recovery faster.`,
         sessions: result.rows,
         count: result.rows.length,
       };
+    },
+  },
+
+  session_set_env: {
+    description: `[Session Manager] Switch the API target for this MCP session (in-memory only, does NOT modify .env files).
+Each Claude Code terminal runs its own MCP process, so switching here only affects THIS conversation.
+Use "production" to work against the live API, "development" for local dev, "staging" for staging.
+Call session_get_env to see the current target.`,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        env: {
+          type: 'string',
+          enum: ['development', 'staging', 'production'],
+          description: 'Target environment',
+        },
+        api_key: {
+          type: 'string',
+          description: 'Override API key (optional — auto-resolved from env vars if not provided)',
+        },
+        company_id: {
+          type: 'string',
+          description: 'Override default company/tenant ID (optional)',
+        },
+      },
+      required: ['env'],
+    },
+    handler: async (args: { env: ApiEnv; api_key?: string; company_id?: string }) => {
+      const result = setRuntimeEnv(args.env, {
+        apiKey: args.api_key,
+        companyId: args.company_id,
+      });
+      return {
+        success: true,
+        message: `Switched to ${result.env}`,
+        ...result,
+      };
+    },
+  },
+
+  session_get_env: {
+    description: `[Session Manager] Show the current API environment for this MCP session — which URL, env name, and tenant the tools are targeting.`,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+    handler: async () => {
+      return getRuntimeEnv();
     },
   },
 };
