@@ -633,6 +633,23 @@ export const tools = {
     },
   },
 
+  admin_ops_update_api_key_scopes: {
+    description: '[Admin Ops] Actualizar los scopes de una API key existente. Reemplaza todos los scopes.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        api_key_id: { type: 'string', description: 'UUID de la API key' },
+        scopes: { type: 'array', items: { type: 'string' }, description: 'Lista completa de scopes (ej: ["sales:read", "payments:write"])' },
+      },
+      required: ['api_key_id', 'scopes'],
+    },
+    handler: async (args: any) => {
+      const res = await api.patch(`/admin/api-keys/${args.api_key_id}/scopes`, { scopes: args.scopes });
+      if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
+      return ok({ api_key: res.data?.data ?? res.data }, 'Scopes actualizados');
+    },
+  },
+
   admin_ops_hard_delete_user: {
     description: '[Admin Ops] Hard delete de un usuario (IRREVERSIBLE). Elimina user_roles, refresh_tokens, credentials y el user.',
     inputSchema: {
