@@ -33,7 +33,7 @@ export const tools = {
   },
 
   products_ops_get: {
-    description: '[Products Ops] Obtener detalle de un producto por ID.',
+    description: '[Products Ops] Obtener detalle de un producto por ID, incluyendo variantes y componentes de kit.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -49,7 +49,7 @@ export const tools = {
   },
 
   products_ops_create: {
-    description: '[Products Ops] Crear nuevo producto.',
+    description: '[Products Ops] Crear nuevo producto. Soporta 3 tipos: unit (simple), variant (con variantes de color/talla/etc), kit (compuesto por otros productos). Para kits, pasar kit_components con los IDs de productos componentes y cantidad.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -59,42 +59,183 @@ export const tools = {
         cost: { type: 'number', description: 'Costo (opcional)' },
         category_id: { type: 'string', description: 'UUID de categoria' },
         description: { type: 'string', description: 'Descripcion' },
-        stock: { type: 'number', description: 'Stock inicial' },
+        product_type: { type: 'string', enum: ['unit', 'variant', 'kit'], description: 'Tipo de producto (default: unit)' },
+        kit_components: {
+          type: 'array',
+          description: 'Componentes del kit (solo para product_type=kit). Cada componente referencia un producto existente.',
+          items: {
+            type: 'object',
+            properties: {
+              component_product_id: { type: 'string', description: 'UUID del producto componente' },
+              quantity: { type: 'number', description: 'Cantidad de este componente en el kit' },
+            },
+            required: ['component_product_id', 'quantity'],
+          },
+        },
+        variants: {
+          type: 'array',
+          description: 'Variantes del producto (solo para product_type=variant). Cada variante tiene nombre, SKU opcional, precio opcional y atributos.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Nombre de la variante (ej: "Rojo", "Talla M")' },
+              sku: { type: 'string', description: 'SKU de la variante (opcional)' },
+              price: { type: 'number', description: 'Precio override (opcional, hereda del padre)' },
+              cost: { type: 'number', description: 'Costo de la variante (opcional)' },
+              attributes: { type: 'object', description: 'Atributos key-value (ej: {"color": "rojo", "talla": "M"})' },
+            },
+            required: ['name'],
+          },
+        },
+        sale_rules: {
+          type: 'object',
+          description: 'Reglas de venta (opcional). Cantidad min/max y si permite fraccionario.',
+          properties: {
+            min_quantity: { type: 'number', description: 'Cantidad minima de venta' },
+            max_quantity: { type: 'number', description: 'Cantidad maxima de venta (opcional)' },
+            allow_fractional: { type: 'boolean', description: 'Permitir cantidades fraccionarias (default: false)' },
+          },
+          required: ['min_quantity'],
+        },
       },
       required: ['name', 'price'],
     },
     handler: async (args: any) => {
-      const res = await api.post('/products', {
+      const body: any = {
         name: args.name,
-        sku: args.sku,
         price: args.price,
-        cost: args.cost,
-        categoryId: args.category_id,
-        description: args.description,
-        stock: args.stock,
-      });
+      };
+      if (args.sku) body.sku = args.sku;
+      if (args.cost !== undefined) body.cost = args.cost;
+      if (args.category_id) body.categoryId = args.category_id;
+      if (args.description) body.description = args.description;
+      if (args.product_type) body.productType = args.product_type;
+
+      if (args.kit_components) {
+        body.kitComponents = args.kit_components.map((c: any) => ({
+          componentProductId: c.component_product_id,
+          quantity: c.quantity,
+        }));
+      }
+
+      if (args.variants) {
+        body.variants = args.variants.map((v: any) => ({
+          name: v.name,
+          sku: v.sku,
+          price: v.price,
+          cost: v.cost,
+          attributes: v.attributes,
+        }));
+      }
+
+      if (args.sale_rules) {
+        body.saleRules = {
+          minQuantity: args.sale_rules.min_quantity,
+          maxQuantity: args.sale_rules.max_quantity,
+          allowFractional: args.sale_rules.allow_fractional,
+        };
+      }
+
+      const res = await api.post('/products', body);
       if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
       return ok({ product: res.data }, 'Producto creado');
     },
   },
 
   products_ops_update: {
-    description: '[Products Ops] Actualizar un producto.',
+    description: '[Products Ops] Actualizar un producto. Soporta cambio de tipo, reemplazo de variantes y componentes de kit.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         product_id: { type: 'string', description: 'UUID del producto' },
-        name: { type: 'string' },
-        price: { type: 'number' },
-        cost: { type: 'number' },
-        description: { type: 'string' },
-        sku: { type: 'string' },
+        name: { type: 'string', description: 'Nuevo nombre' },
+        price: { type: 'number', description: 'Nuevo precio' },
+        cost: { type: 'number', description: 'Nuevo costo' },
+        description: { type: 'string', description: 'Nueva descripcion' },
+        category_id: { type: 'string', description: 'UUID de nueva categoria' },
+        product_type: { type: 'string', enum: ['unit', 'variant', 'kit'], description: 'Cambiar tipo de producto' },
+        kit_components: {
+          type: 'array',
+          description: 'Reemplazar componentes del kit (borra los anteriores y crea los nuevos)',
+          items: {
+            type: 'object',
+            properties: {
+              component_product_id: { type: 'string', description: 'UUID del producto componente' },
+              quantity: { type: 'number', description: 'Cantidad' },
+            },
+            required: ['component_product_id', 'quantity'],
+          },
+        },
+        variants: {
+          type: 'array',
+          description: 'Reemplazar variantes (borra las anteriores y crea las nuevas)',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Nombre de la variante' },
+              sku: { type: 'string', description: 'SKU (opcional)' },
+              price: { type: 'number', description: 'Precio override (opcional)' },
+              cost: { type: 'number', description: 'Costo (opcional)' },
+              attributes: { type: 'object', description: 'Atributos key-value' },
+            },
+            required: ['name'],
+          },
+        },
+        sale_rules: {
+          type: 'object',
+          description: 'Reglas de venta',
+          properties: {
+            min_quantity: { type: 'number' },
+            max_quantity: { type: 'number' },
+            allow_fractional: { type: 'boolean' },
+          },
+        },
       },
       required: ['product_id'],
     },
     handler: async (args: any) => {
-      const { product_id, ...data } = args;
-      const res = await api.put(`/products/${product_id}`, data);
+      const { product_id, ...rest } = args;
+      const body: any = {};
+
+      if (rest.name !== undefined) body.name = rest.name;
+      if (rest.price !== undefined) body.price = rest.price;
+      if (rest.cost !== undefined) body.cost = rest.cost;
+      if (rest.description !== undefined) body.description = rest.description;
+      if (rest.category_id !== undefined) body.categoryId = rest.category_id;
+      if (rest.product_type !== undefined) body.productType = rest.product_type;
+
+      if (rest.kit_components !== undefined) {
+        body.kitComponents = rest.kit_components
+          ? rest.kit_components.map((c: any) => ({
+              componentProductId: c.component_product_id,
+              quantity: c.quantity,
+            }))
+          : null;
+      }
+
+      if (rest.variants !== undefined) {
+        body.variants = rest.variants
+          ? rest.variants.map((v: any) => ({
+              name: v.name,
+              sku: v.sku,
+              price: v.price,
+              cost: v.cost,
+              attributes: v.attributes,
+            }))
+          : null;
+      }
+
+      if (rest.sale_rules !== undefined) {
+        body.saleRules = rest.sale_rules
+          ? {
+              minQuantity: rest.sale_rules.min_quantity,
+              maxQuantity: rest.sale_rules.max_quantity,
+              allowFractional: rest.sale_rules.allow_fractional,
+            }
+          : null;
+      }
+
+      const res = await api.put(`/products/${product_id}`, body);
       if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
       return ok({ product: res.data }, 'Producto actualizado');
     },
@@ -180,14 +321,14 @@ export const tools = {
   },
 
   products_ops_set_price: {
-    description: '[Products Ops] Registrar nuevo precio para un producto. Crea una versión en el historial de precios y actualiza el precio actual. Permite rastrear cambios de precio con fecha efectiva y motivo.',
+    description: '[Products Ops] Registrar nuevo precio para un producto. Crea una version en el historial de precios y actualiza el precio actual. Permite rastrear cambios de precio con fecha efectiva y motivo.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         product_id: { type: 'string', description: 'UUID del producto' },
         price: { type: 'number', description: 'Nuevo precio de venta (COP)' },
         cost: { type: 'number', description: 'Costo del producto (opcional)' },
-        reason: { type: 'string', description: 'Motivo del cambio de precio (ej: "ajuste inflación", "campaña Facebook")' },
+        reason: { type: 'string', description: 'Motivo del cambio de precio (ej: "ajuste inflacion", "campana Facebook")' },
         effective_from: { type: 'string', description: 'Fecha efectiva ISO 8601 (default: ahora). Ej: 2025-04-01T00:00:00Z' },
       },
       required: ['product_id', 'price'],
@@ -220,7 +361,7 @@ export const tools = {
   },
 
   products_ops_price_current: {
-    description: '[Products Ops] Obtener el precio vigente de un producto (última versión activa).',
+    description: '[Products Ops] Obtener el precio vigente de un producto (ultima version activa).',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -236,7 +377,7 @@ export const tools = {
   },
 
   products_ops_price_at: {
-    description: '[Products Ops] Consultar el precio de un producto en una fecha específica. Útil para auditoría y cálculo de márgenes históricos.',
+    description: '[Products Ops] Consultar el precio de un producto en una fecha especifica. Util para auditoria y calculo de margenes historicos.',
     inputSchema: {
       type: 'object' as const,
       properties: {
