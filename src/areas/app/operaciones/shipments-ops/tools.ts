@@ -375,4 +375,61 @@ export const tools = {
       return ok({ summary: res.data });
     },
   },
+
+  // ── Carrier Remittances ──
+
+  shipments_ops_remittances_list: {
+    description: '[Shipments Ops] Listar remesas de transportadora con filtros por fecha y estado de pago.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        start_date: { type: 'string', description: 'Fecha inicio YYYY-MM-DD' },
+        end_date: { type: 'string', description: 'Fecha fin YYYY-MM-DD' },
+        carrier_id: { type: 'string', description: 'UUID del carrier (opcional)' },
+        payment_status: { type: 'string', description: 'pending, in_process, paid, reconciled' },
+      },
+    },
+    handler: async (args: any) => {
+      const params = new URLSearchParams();
+      if (args.start_date) params.set('startDate', args.start_date);
+      if (args.end_date) params.set('endDate', args.end_date);
+      if (args.carrier_id) params.set('carrierId', args.carrier_id);
+      if (args.payment_status) params.set('paymentStatus', args.payment_status);
+      const res = await api.get(`/remittances?${params.toString()}`);
+      if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
+      return ok({ remittances: res.data });
+    },
+  },
+
+  shipments_ops_remittance_get: {
+    description: '[Shipments Ops] Obtener detalle de una remesa con sus envios.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        remittance_id: { type: 'string', description: 'UUID de la remesa' },
+      },
+      required: ['remittance_id'],
+    },
+    handler: async (args: any) => {
+      const res = await api.get(`/remittances/${args.remittance_id}`);
+      if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
+      return ok({ remittance: res.data });
+    },
+  },
+
+  shipments_ops_remittance_delete: {
+    description: '[Shipments Ops] Eliminar una remesa (solo si no esta pagada). Los envios quedan sin remesa asignada.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        remittance_id: { type: 'string', description: 'UUID de la remesa' },
+      },
+      required: ['remittance_id'],
+    },
+    handler: async (args: any) => {
+      const res = await api.del(`/remittances/${args.remittance_id}`);
+      if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
+      return ok({}, 'Remesa eliminada');
+    },
+  },
 };
