@@ -432,4 +432,32 @@ export const tools = {
       return ok({}, 'Remesa eliminada');
     },
   },
+
+  shipments_ops_remittance_create: {
+    description: '[Shipments Ops] Crear remesa manualmente con carrier, fecha de despacho y lista de envios. Util para conciliacion retroactiva.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        carrier_id: { type: 'string', description: 'UUID del carrier/transportadora' },
+        dispatch_date: { type: 'string', description: 'Fecha de despacho YYYY-MM-DD' },
+        shipment_ids: {
+          type: 'array',
+          description: 'Array de UUIDs de envios a incluir en la remesa',
+          items: { type: 'string' },
+        },
+        notes: { type: 'string', description: 'Notas opcionales' },
+      },
+      required: ['carrier_id', 'dispatch_date', 'shipment_ids'],
+    },
+    handler: async (args: any) => {
+      const res = await api.post('/remittances', {
+        carrierId: args.carrier_id,
+        dispatchDate: args.dispatch_date,
+        shipmentIds: args.shipment_ids,
+        notes: args.notes,
+      });
+      if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
+      return ok({ remittance: res.data }, 'Remesa creada');
+    },
+  },
 };
