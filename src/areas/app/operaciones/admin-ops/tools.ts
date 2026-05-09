@@ -668,4 +668,176 @@ export const tools = {
     },
   },
 
+  // ─── Provision Tenant (all-in-one) ───────────────────────────────────────
+
+  admin_ops_provision_tenant: {
+    description: '[Admin Ops] Provisionar tenant completo: empresa + admin user + plan + API key (ecommerce:*) + ecommerce site con subdomainSlug. Retorna IDs y rawKey.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        company_name: { type: 'string', description: 'Nombre comercial' },
+        legal_name: { type: 'string', description: 'Razon social' },
+        tax_id: { type: 'string', description: 'NIT' },
+        admin_email: { type: 'string', description: 'Email del admin' },
+        admin_password: { type: 'string', description: 'Password del admin' },
+        admin_first_name: { type: 'string', description: 'Nombre del admin' },
+        admin_last_name: { type: 'string', description: 'Apellido del admin' },
+        plan_id: { type: 'string', description: 'UUID del plan (debe tener ecommerce)' },
+        subdomain_slug: { type: 'string', description: 'Slug subdominio (ej: mitienda)' },
+        primary_color: { type: 'string', description: 'Color primario hex (ej: #2563eb)' },
+        phone: { type: 'string', description: 'Telefono/WhatsApp' },
+        email: { type: 'string', description: 'Email de contacto tienda' },
+      },
+      required: ['company_name', 'legal_name', 'tax_id', 'admin_email', 'admin_password', 'admin_first_name', 'admin_last_name', 'plan_id', 'subdomain_slug'],
+    },
+    handler: async (args: any) => {
+      const results: any = {};
+
+      // 1. Crear empresa (incluye admin user via createCompanyWithDefaults)
+      const companyRes = await api.post('/admin/companies', {
+        name: args.company_name,
+        legalName: args.legal_name,
+        taxId: args.tax_id,
+        adminFirstName: args.admin_first_name,
+        adminLastName: args.admin_last_name,
+        adminEmail: args.admin_email,
+        adminPassword: args.admin_password,
+        email: args.email || args.admin_email,
+        phone: args.phone,
+        companyType: 'merchant',
+      });
+      if (!companyRes.ok) return err('Crear empresa: ' + JSON.stringify(companyRes.data));
+      const companyId = companyRes.data?.id;
+      if (!companyId) return err('No se obtuvo companyId');
+      results.company = { id: companyId, name: args.company_name };
+
+      // 2. Asignar plan
+      const planRes = await api.put('/admin/subscriptions/company/' + companyId + '/plan', { planId: args.plan_id });
+      if (!planRes.ok) return err('Asignar plan: ' + JSON.stringify(planRes.data));
+      results.plan = { id: args.plan_id, assigned: true };
+
+      // 3. Crear API key
+      const keyRes = await api.post('/admin/api-keys', {
+        name: args.subdomain_slug + '-catalog',
+        companyId,
+        scopes: ['ecommerce:*'],
+      });
+      if (!keyRes.ok) return err('Crear API key: ' + JSON.stringify(keyRes.data));
+      results.apiKey = { id: keyRes.data?.id, rawKey: keyRes.data?.rawKey };
+
+      // 4. Crear ecommerce site
+      const siteHeaders = { 'x-company-id': companyId };
+      const siteRes = await api.post('/ecommerce-sites', {
+        name: args.company_name,
+        type: 'CATALOG',
+        websiteUrl: 'https://' + args.subdomain_slug + '.store.novalogic.com.co',
+      }, { headers: siteHeaders });
+      if (!siteRes.ok) return err('Crear site: ' + JSON.stringify(siteRes.data));
+      const siteId = siteRes.data?.id;
+      results.site = { id: siteId };
+
+      // 5. Configurar subdomainSlug + apariencia
+      const updatePayload: any = {
+        subdomainSlug: args.subdomain_slug,
+        description: 'Tienda online de ' + args.company_name,
+        currency: 'COP',
+        locale: 'es-CO',
+        timezone: 'America/Bogota',
+      };
+      if (args.primary_color) updatePayload.appearance = { primaryColor: args.primary_color, theme: 'light' };
+      if (args.phone) updatePayload.contact = { phone: args.phone, whatsapp: args.phone, email: args.email || args.admin_email };
+      await api.put('/ecommerce-sites/' + siteId, updatePayload, { headers: siteHeaders });
+
+      results.catalogUrl = 'https://novalogic-catalog.netlify.app/?tenant=' + args.subdomain_slug;
+      results.dashboardLogin = { email: args.admin_email, url: 'https://cloud.novalogic.com.co/acceso' };
+
+      return ok(results, 'Tenant "' + args.company_name + '" provisionado. API key: ' + (results.apiKey?.rawKey || 'ver results'));
+    },
+  },
+
+};
+
+export const provisionTenantTool = {
+  admin_ops_provision_tenant: {
+    description: '[Admin Ops] Provisionar un tenant completo en un solo paso: crea empresa, admin user, asigna plan, genera API key (ecommerce:*), crea ecommerce site con subdomainSlug y config. Retorna todos los IDs y la rawKey.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        company_name: { type: 'string', description: 'Nombre comercial' },
+        legal_name: { type: 'string', description: 'Razón social' },
+        tax_id: { type: 'string', description: 'NIT' },
+        admin_email: { type: 'string', description: 'Email del admin' },
+        admin_password: { type: 'string', description: 'Contraseña del admin' },
+        admin_first_name: { type: 'string', description: 'Nombre del admin' },
+        admin_last_name: { type: 'string', description: 'Apellido del admin' },
+        plan_id: { type: 'string', description: 'UUID del plan a asignar (debe tener ecommerce)' },
+        subdomain_slug: { type: 'string', description: 'Slug para subdominio (ej: "mitienda" → mitienda.store.novalogic.com.co)' },
+        primary_color: { type: 'string', description: 'Color primario hex (ej: #2563eb)' },
+        phone: { type: 'string', description: 'Teléfono/WhatsApp de contacto' },
+        email: { type: 'string', description: 'Email de contacto de la tienda' },
+      },
+      required: ['company_name', 'legal_name', 'tax_id', 'admin_email', 'admin_password', 'admin_first_name', 'admin_last_name', 'plan_id', 'subdomain_slug'],
+    },
+    handler: async (args: any) => {
+      const results: any = {};
+
+      // 1. Crear empresa
+      const companyRes = await api.post('/admin/companies', {
+        name: args.company_name,
+        legalName: args.legal_name,
+        taxId: args.tax_id,
+        adminFirstName: args.admin_first_name,
+        adminLastName: args.admin_last_name,
+        adminEmail: args.admin_email,
+        adminPassword: args.admin_password,
+        email: args.email || args.admin_email,
+        phone: args.phone,
+        companyType: 'merchant',
+      });
+      if (!companyRes.ok) return err(`Crear empresa falló: ${JSON.stringify(companyRes.data)}`);
+      const companyId = companyRes.data?.id;
+      if (!companyId) return err('No se obtuvo companyId');
+      results.company = { id: companyId, name: args.company_name };
+
+      // 2. Asignar plan
+      const planRes = await api.put(`/admin/subscriptions/company/${companyId}/plan`, { planId: args.plan_id });
+      if (!planRes.ok) return err(`Asignar plan falló: ${JSON.stringify(planRes.data)}`);
+      results.plan = { id: args.plan_id, assigned: true };
+
+      // 3. Crear API key
+      const keyRes = await api.post('/admin/api-keys', {
+        name: `${args.subdomain_slug}-catalog`,
+        companyId,
+        scopes: ['ecommerce:*'],
+      });
+      if (!keyRes.ok) return err(`Crear API key falló: ${JSON.stringify(keyRes.data)}`);
+      results.apiKey = { id: keyRes.data?.id, rawKey: keyRes.data?.rawKey, name: keyRes.data?.name };
+
+      // 4. Crear ecommerce site
+      const siteRes = await api.post('/ecommerce-sites', {
+        name: args.company_name,
+        type: 'CATALOG',
+        websiteUrl: `https://${args.subdomain_slug}.store.novalogic.com.co`,
+      }, { headers: { 'x-company-id': companyId } });
+      if (!siteRes.ok) return err(`Crear site falló: ${JSON.stringify(siteRes.data)}`);
+      const siteId = siteRes.data?.id;
+      results.site = { id: siteId, slug: siteRes.data?.slug };
+
+      // 5. Configurar subdomainSlug
+      await api.put(`/ecommerce-sites/${siteId}`, { subdomainSlug: args.subdomain_slug }, { headers: { 'x-company-id': companyId } });
+
+      // 6. Configurar apariencia y contacto
+      const configPayload: any = { currency: 'COP', locale: 'es-CO', timezone: 'America/Bogota' };
+      if (args.primary_color) configPayload.appearance = { primaryColor: args.primary_color, theme: 'light' };
+      if (args.phone) configPayload.contact = { phone: args.phone, whatsapp: args.phone, email: args.email || args.admin_email };
+      configPayload.description = `Tienda online de ${args.company_name}`;
+
+      await api.put(`/ecommerce-sites/${siteId}`, configPayload, { headers: { 'x-company-id': companyId } });
+
+      results.catalogUrl = `https://novalogic-catalog.netlify.app/?tenant=${args.subdomain_slug}`;
+      results.dashboardLogin = { email: args.admin_email, url: 'https://cloud.novalogic.com.co/acceso' };
+
+      return ok(results, `Tenant "${args.company_name}" provisionado. API key (guardar): ${results.apiKey?.rawKey}`);
+    },
+  },
 };

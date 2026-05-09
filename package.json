@@ -22,6 +22,8 @@
     "playwright": "^1.59.0-alpha-1771104257000",
     "sharp": "^0.34.5",
     "tesseract.js": "^7.0.0",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.6.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

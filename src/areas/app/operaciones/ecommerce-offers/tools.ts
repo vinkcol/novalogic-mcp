@@ -52,8 +52,9 @@ export const tools = {
         description: { type: 'string' },
         offer_type: {
           type: 'string',
-          description: 'flash_sale | seasonal | clearance | general',
+          description: 'flash_sale | seasonal | clearance | general | free_shipping',
         },
+        min_subtotal: { type: 'number', description: 'Subtotal mínimo para que aplique (ej: 80000). NULL = sin mínimo' },
         discount_type: { type: 'string', description: 'percentage | fixed' },
         discount_value: { type: 'number' },
         applies_to: {
@@ -69,19 +70,20 @@ export const tools = {
       required: ['name', 'offer_type', 'discount_type', 'discount_value', 'start_date', 'end_date'],
     },
     handler: async (args: any) => {
-      const body = {
-        siteId: args.site_id,
+      const body: any = {
         name: args.name,
-        description: args.description,
         offerType: args.offer_type,
         discountType: args.discount_type,
         discountValue: args.discount_value,
-        appliesTo: args.applies_to,
         startDate: args.start_date,
         endDate: args.end_date,
-        priority: args.priority,
-        isActive: args.is_active,
       };
+      if (args.site_id) body.siteId = args.site_id;
+      if (args.description) body.description = args.description;
+      if (args.applies_to) body.appliesTo = args.applies_to;
+      if (args.min_subtotal !== undefined) body.minSubtotal = args.min_subtotal;
+      if (args.priority !== undefined) body.priority = args.priority;
+      if (args.is_active !== undefined) body.isActive = args.is_active;
       const res = await api.post('/ecommerce/offers', body);
       if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
       return ok({ offer: res.data }, 'Oferta creada');
@@ -97,6 +99,7 @@ export const tools = {
         name: { type: 'string' },
         description: { type: 'string' },
         discount_value: { type: 'number' },
+        min_subtotal: { type: 'number', description: 'Subtotal mínimo. NULL = sin mínimo' },
         start_date: { type: 'string' },
         end_date: { type: 'string' },
         priority: { type: 'number' },
@@ -111,6 +114,7 @@ export const tools = {
       if (rest.name !== undefined) body.name = rest.name;
       if (rest.description !== undefined) body.description = rest.description;
       if (rest.discount_value !== undefined) body.discountValue = rest.discount_value;
+      if (rest.min_subtotal !== undefined) body.minSubtotal = rest.min_subtotal;
       if (rest.start_date !== undefined) body.startDate = rest.start_date;
       if (rest.end_date !== undefined) body.endDate = rest.end_date;
       if (rest.priority !== undefined) body.priority = rest.priority;

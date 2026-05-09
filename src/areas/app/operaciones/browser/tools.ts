@@ -127,6 +127,7 @@ export const tools: Record<string, any> = {
       const baseUrl = args.url || APP_DEFAULTS.dashboardUrl;
 
       const browser = await chromium.launch({
+        executablePath: '/usr/bin/google-chrome-stable',
         headless,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });

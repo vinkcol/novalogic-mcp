@@ -172,6 +172,37 @@ export const tools = {
     },
   },
 
+  inventory_ops_set_distribution: {
+    description:
+      '[Inventory Ops] Cambiar la distribución de stock entre POS y Ecommerce. Los porcentajes deben sumar 100.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        item_id: { type: 'string', description: 'UUID del item de inventario' },
+        pos_percentage: {
+          type: 'number',
+          description: 'Porcentaje de stock para POS (0-100)',
+        },
+        ecommerce_percentage: {
+          type: 'number',
+          description: 'Porcentaje de stock para Ecommerce (0-100)',
+        },
+      },
+      required: ['item_id', 'pos_percentage', 'ecommerce_percentage'],
+    },
+    handler: async (args: any) => {
+      const pos = Number(args.pos_percentage);
+      const ecom = Number(args.ecommerce_percentage);
+      if (pos + ecom !== 100) return err(`Los porcentajes deben sumar 100, got ${pos + ecom}`);
+      const res = await api.put(`/internal/inventory/item/${args.item_id}/distribution`, {
+        posPercentage: pos,
+        ecommercePercentage: ecom,
+      });
+      if (!res.ok) return err(`Error ${res.status}: ${JSON.stringify(res.data)}`);
+      return ok({ item: res.data }, `Distribución actualizada: POS ${pos}% / Ecommerce ${ecom}%`);
+    },
+  },
+
   inventory_ops_alerts: {
     description: '[Inventory Ops] Items con stock por debajo del mínimo configurado. Devuelve nombre, SKU, stock actual, mínimo y déficit.',
     inputSchema: {

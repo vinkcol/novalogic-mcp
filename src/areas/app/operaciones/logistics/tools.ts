@@ -155,9 +155,11 @@ export const tools = {
         name: { type: 'string', description: 'Nombre de la subzona' },
         description: { type: 'string' },
         flete_cost: { type: 'number', description: 'Costo interno flete. Default: 0' },
-        client_cost: { type: 'number', description: 'Cobro al cliente. Default: 0' },
+        client_cost: { type: 'number', description: 'Cobro al cliente (POS). Default: 0' },
         return_cost: { type: 'number', description: 'Costo devolución. Default: 0' },
-        estimated_days: { type: 'number', description: 'Días estimados de entrega' },
+        estimated_days: { type: 'number', description: 'Días estimados de entrega (POS)' },
+        ecommerce_client_cost: { type: 'number', description: 'Cobro al cliente en ecommerce. NULL = usa client_cost' },
+        ecommerce_estimated_days: { type: 'number', description: 'Días estimados en ecommerce. NULL = usa estimated_days' },
         is_active: { type: 'boolean' },
         cities: {
           type: 'array',
@@ -181,6 +183,8 @@ export const tools = {
       if (args.client_cost !== undefined) body.clientCost = args.client_cost;
       if (args.return_cost !== undefined) body.returnCost = args.return_cost;
       if (args.estimated_days !== undefined) body.estimatedDays = args.estimated_days;
+      if (args.ecommerce_client_cost !== undefined) body.ecommerceClientCost = args.ecommerce_client_cost;
+      if (args.ecommerce_estimated_days !== undefined) body.ecommerceEstimatedDays = args.ecommerce_estimated_days;
       if (args.is_active !== undefined) body.isActive = args.is_active;
       if (args.cities) body.cities = args.cities;
 
@@ -211,6 +215,8 @@ export const tools = {
           clientCost: sz.clientCost,
           returnCost: sz.returnCost,
           estimatedDays: sz.estimatedDays,
+          ecommerceClientCost: sz.ecommerceClientCost,
+          ecommerceEstimatedDays: sz.ecommerceEstimatedDays,
           isActive: sz.isActive,
           cityCount: sz.cities?.length ?? 0,
         })),
@@ -229,9 +235,11 @@ export const tools = {
         name: { type: 'string' },
         description: { type: 'string' },
         flete_cost: { type: 'number' },
-        client_cost: { type: 'number' },
+        client_cost: { type: 'number', description: 'Cobro al cliente (POS)' },
         return_cost: { type: 'number' },
-        estimated_days: { type: 'number' },
+        estimated_days: { type: 'number', description: 'Días estimados (POS)' },
+        ecommerce_client_cost: { type: 'number', description: 'Cobro al cliente en ecommerce. NULL = hereda client_cost' },
+        ecommerce_estimated_days: { type: 'number', description: 'Días estimados en ecommerce. NULL = hereda estimated_days' },
         is_active: { type: 'boolean' },
         cities: {
           type: 'array',
@@ -256,6 +264,8 @@ export const tools = {
       if (args.client_cost !== undefined) body.clientCost = args.client_cost;
       if (args.return_cost !== undefined) body.returnCost = args.return_cost;
       if (args.estimated_days !== undefined) body.estimatedDays = args.estimated_days;
+      if (args.ecommerce_client_cost !== undefined) body.ecommerceClientCost = args.ecommerce_client_cost;
+      if (args.ecommerce_estimated_days !== undefined) body.ecommerceEstimatedDays = args.ecommerce_estimated_days;
       if (args.is_active !== undefined) body.isActive = args.is_active;
       if (args.cities !== undefined) body.cities = args.cities;
 
@@ -435,6 +445,8 @@ export const tools = {
                     client_cost: { type: 'number' },
                     return_cost: { type: 'number' },
                     estimated_days: { type: 'number' },
+                    ecommerce_client_cost: { type: 'number' },
+                    ecommerce_estimated_days: { type: 'number' },
                     cities: {
                       type: 'array',
                       items: {
@@ -483,6 +495,8 @@ export const tools = {
             clientCost: szDef.client_cost ?? 0,
             returnCost: szDef.return_cost ?? 0,
             estimatedDays: szDef.estimated_days,
+            ecommerceClientCost: szDef.ecommerce_client_cost,
+            ecommerceEstimatedDays: szDef.ecommerce_estimated_days,
             cities: szDef.cities,
           };
 

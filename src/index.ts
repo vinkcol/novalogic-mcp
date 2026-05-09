@@ -25,6 +25,10 @@ import {
 import { initDb } from './db/client.js';
 import { initMongo } from './db/mongo-client.js';
 import { loadAllAreas, generateAgentsGuideFromAreas } from './registry/index.js';
+import { initRedis } from './services/redis-client.js';
+import { initEventBus } from './services/event-bus.js';
+import { initTaskQueue } from './services/task-queue.js';
+import { registerAgentCards } from './services/agent-protocol.js';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -88,6 +92,17 @@ async function main() {
     );
   }
 
+  // Connect to Redis (event bus + task queue)
+  try {
+    await initRedis();
+    process.stderr.write('[novalogic-mcp] Redis connected\n');
+  } catch (error: any) {
+    process.stderr.write(
+      '[novalogic-mcp] Warning: Redis not available (' + error.message + '). ' +
+        'Orchestration, event bus, and task queue tools require Redis.\n',
+    );
+  }
+
   // Load all areas and tools via auto-discovery
   const { areas, allTools } = await loadAllAreas();
 
@@ -97,6 +112,30 @@ async function main() {
     (sum, area) => sum + Object.keys(area.agents).length,
     0,
   );
+
+  // Register agent cards from discovered agents
+  try {
+    const cardCount = await registerAgentCards(areas);
+    process.stderr.write(`[novalogic-mcp] ${cardCount} agent cards registered\n`);
+  } catch (error: any) {
+    process.stderr.write('[novalogic-mcp] Warning: Could not register agent cards (' + error.message + ')\n');
+  }
+
+  // Initialize task queue (workers use tool registry)
+  try {
+    await initTaskQueue(allTools);
+    process.stderr.write('[novalogic-mcp] Task queue initialized\n');
+  } catch (error: any) {
+    process.stderr.write('[novalogic-mcp] Warning: Task queue not available (' + error.message + ')\n');
+  }
+
+  // Initialize event bus
+  try {
+    await initEventBus();
+    process.stderr.write('[novalogic-mcp] Event bus initialized\n');
+  } catch (error: any) {
+    process.stderr.write('[novalogic-mcp] Warning: Event bus not available (' + error.message + ')\n');
+  }
 
   // -------------------------------------------------------------------------
   // Register handlers on a server instance

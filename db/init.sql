@@ -23,12 +23,12 @@ CREATE TABLE IF NOT EXISTS memories (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_memories_agent ON memories(agent);
-CREATE INDEX idx_memories_category ON memories(category);
-CREATE INDEX idx_memories_tags ON memories USING gin(tags);
-CREATE INDEX idx_memories_metadata ON memories USING gin(metadata);
-CREATE INDEX idx_memories_content_trgm ON memories USING gin(content gin_trgm_ops);
-CREATE INDEX idx_memories_title_trgm ON memories USING gin(title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_memories_agent ON memories(agent);
+CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
+CREATE INDEX IF NOT EXISTS idx_memories_tags ON memories USING gin(tags);
+CREATE INDEX IF NOT EXISTS idx_memories_metadata ON memories USING gin(metadata);
+CREATE INDEX IF NOT EXISTS idx_memories_content_trgm ON memories USING gin(content gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_memories_title_trgm ON memories USING gin(title gin_trgm_ops);
 
 -- ============================================
 -- PROJECT MANAGEMENT (PM Agent)
@@ -769,3 +769,171 @@ CREATE INDEX IF NOT EXISTS idx_graph_edges_from
     ON graph_edges (graph_id, from_key, rel_type);
 CREATE INDEX IF NOT EXISTS idx_graph_edges_to
     ON graph_edges (graph_id, to_key, rel_type);
+
+-- ============================================================================
+-- ORCHESTRATION: Workflow Definitions & Instances
+-- ============================================================================
+
+DO $$ BEGIN
+    CREATE TYPE workflow_status AS ENUM ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+    CREATE TYPE workflow_step_status AS ENUM ('pending', 'running', 'completed', 'failed', 'skipped', 'waiting');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS workflow_definitions (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(200) NOT NULL UNIQUE,
+    description TEXT,
+    version INTEGER DEFAULT 1,
+    steps JSONB NOT NULL DEFAULT '[]',
+    edges JSONB NOT NULL DEFAULT '[]',
+    metadata JSONB DEFAULT '{}',
+    created_by VARCHAR(100),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS workflow_instances (
+    id SERIAL PRIMARY KEY,
+    definition_id INTEGER REFERENCES workflow_definitions(id),
+    definition_name VARCHAR(200) NOT NULL,
+    status workflow_status DEFAULT 'pending',
+    input JSONB DEFAULT '{}',
+    output JSONB,
+    context JSONB DEFAULT '{}',
+    trace_id VARCHAR(100) NOT NULL,
+    started_by VARCHAR(100),
+    error_message TEXT,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wf_instances_status ON workflow_instances(status);
+CREATE INDEX IF NOT EXISTS idx_wf_instances_trace ON workflow_instances(trace_id);
+CREATE INDEX IF NOT EXISTS idx_wf_instances_def ON workflow_instances(definition_id);
+
+CREATE TABLE IF NOT EXISTS workflow_step_executions (
+    id SERIAL PRIMARY KEY,
+    instance_id INTEGER NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
+    step_id VARCHAR(100) NOT NULL,
+    step_name VARCHAR(200),
+    step_type VARCHAR(50) NOT NULL,
+    status workflow_step_status DEFAULT 'pending',
+    input JSONB DEFAULT '{}',
+    output JSONB,
+    error_message TEXT,
+    attempts INTEGER DEFAULT 0,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(instance_id, step_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wf_steps_instance ON workflow_step_executions(instance_id);
+CREATE INDEX IF NOT EXISTS idx_wf_steps_status ON workflow_step_executions(status);
+
+-- ============================================================================
+-- ORCHESTRATION: Agent Cards (capability advertisement)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS agent_cards (
+    id SERIAL PRIMARY KEY,
+    agent_id VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    layer VARCHAR(20) NOT NULL,
+    area_id VARCHAR(100) NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    capabilities TEXT[] DEFAULT '{}',
+    tool_names TEXT[] DEFAULT '{}',
+    accepts_tasks BOOLEAN DEFAULT false,
+    max_concurrent INTEGER DEFAULT 1,
+    avg_latency_ms INTEGER,
+    status VARCHAR(20) DEFAULT 'active',
+    metadata JSONB DEFAULT '{}',
+    last_heartbeat TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_cards_status ON agent_cards(status);
+CREATE INDEX IF NOT EXISTS idx_agent_cards_capabilities ON agent_cards USING gin(capabilities);
+
+-- ============================================================================
+-- ORCHESTRATION: Agent Messages (request/response + broadcast)
+-- ============================================================================
+
+DO $$ BEGIN
+    CREATE TYPE agent_msg_type AS ENUM ('request', 'response', 'broadcast', 'notification');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+    CREATE TYPE agent_msg_status AS ENUM ('pending', 'delivered', 'processing', 'completed', 'failed', 'expired');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS agent_messages (
+    id SERIAL PRIMARY KEY,
+    thread_id VARCHAR(100) NOT NULL,
+    correlation_id VARCHAR(100),
+    msg_type agent_msg_type NOT NULL,
+    from_agent VARCHAR(100) NOT NULL,
+    to_agent VARCHAR(100),
+    topic VARCHAR(200),
+    payload JSONB NOT NULL DEFAULT '{}',
+    status agent_msg_status DEFAULT 'pending',
+    response JSONB,
+    trace_id VARCHAR(100),
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    responded_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_msg_thread ON agent_messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_agent_msg_to ON agent_messages(to_agent, status);
+CREATE INDEX IF NOT EXISTS idx_agent_msg_trace ON agent_messages(trace_id);
+CREATE INDEX IF NOT EXISTS idx_agent_msg_topic ON agent_messages(topic);
+
+-- ============================================================================
+-- ORCHESTRATION: Observability
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS obs_traces (
+    id SERIAL PRIMARY KEY,
+    trace_id VARCHAR(100) NOT NULL,
+    parent_span_id VARCHAR(100),
+    span_id VARCHAR(100) NOT NULL,
+    operation VARCHAR(200) NOT NULL,
+    agent VARCHAR(100),
+    tool VARCHAR(200),
+    status VARCHAR(20) DEFAULT 'ok',
+    duration_ms INTEGER,
+    input_summary TEXT,
+    output_summary TEXT,
+    error_message TEXT,
+    metadata JSONB DEFAULT '{}',
+    started_at TIMESTAMPTZ NOT NULL,
+    ended_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_obs_traces_trace ON obs_traces(trace_id);
+CREATE INDEX IF NOT EXISTS idx_obs_traces_agent ON obs_traces(agent);
+CREATE INDEX IF NOT EXISTS idx_obs_traces_created ON obs_traces(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS obs_metrics (
+    id SERIAL PRIMARY KEY,
+    metric_name VARCHAR(200) NOT NULL,
+    metric_type VARCHAR(20) NOT NULL DEFAULT 'counter',
+    value DECIMAL(14, 4) NOT NULL,
+    labels JSONB DEFAULT '{}',
+    agent VARCHAR(100),
+    recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_obs_metrics_name ON obs_metrics(metric_name, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_obs_metrics_agent ON obs_metrics(agent, recorded_at DESC);
